@@ -63,7 +63,14 @@ export class Bot {
       const previous = this.store.byHash(hash, userId);
       if (previous && (!previous.spreadsheetId || previous.spreadsheetId === this.sheetId(userId))) {
         if (previous.status === 'saved') await this.telegram.send(chatId, `Этот скриншот уже обработан. Строка ${previous.row}.`);
-        else await this.show(previous);
+        else {
+          if (validate(previous.order).errors.length) {
+            const order = await this.ocr.recognize(buffer);
+            await this.store.edit(previous.id, userId, order);
+            previous.order = order;
+          }
+          await this.show(previous);
+        }
         return;
       }
       const order = await this.ocr.recognize(buffer);

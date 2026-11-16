@@ -1,6 +1,6 @@
 import { number, round } from './order.mjs';
 
-function groupRows(words) {
+export function groupRows(words) {
   const rows = [];
   for (const word of [...words].sort((a, b) => (a.y + a.height / 2) - (b.y + b.height / 2) || a.x - b.x)) {
     const cy = word.y + word.height / 2;
@@ -44,17 +44,23 @@ export function parseOcr(result) {
     return row && Math.abs(row.cy - label.cy) < limit ? row.text : '';
   }
   // The Russian pass reads the hryvnia sign more reliably (English can turn ₴660 into 2660).
-  order.fiat = numeric(alignedFull(amountLabel, 0.03) || aligned(amountLabel, 0.03));
-  order.price = numeric(alignedFull(priceLabel, 0.025) || aligned(priceLabel));
+  order.fiat = Object.hasOwn(result.money ?? {}, 'fiat') ? number(result.money.fiat) : numeric(alignedFull(amountLabel, 0.03) || aligned(amountLabel, 0.03));
+  order.price = Object.hasOwn(result.money ?? {}, 'price') ? number(result.money.price) : numeric(alignedFull(priceLabel, 0.025) || aligned(priceLabel));
   const feeLabel = findLabel(/Комисс|Коміс|Fee/i);
   const fee = numeric(aligned(feeLabel));
   order.fee = fee === null ? null : Math.abs(fee);
   // The large signed amount is the actual wallet credit/debit, never fiat / price.
-  const hero = rows.find(r => /[-+−–]\s*\d[\d,.]*\s*USDT/i.test(r.text) && r.cy < 0.25);
-  const total = hero?.text.match(/[-+−–]\s*(\d+(?:[,.]\d+)?)\s*USDT/i);
-  order.total = total ? number(total[1]) : null;
+  const joinedDecimal = text => text.replace(/(\d)\s*([,.])\s*(?=\d)/g, '$1$2');
+  const hero = rows.find(r => /[-+−–]\s*\d[\d,.]*\s*USDT/i.test(joinedDecimal(r.text)) && r.cy < 0.25);
+  const total = hero && joinedDecimal(hero.text).match(/[-+−–]\s*(\d+(?:[,.]\d+)?)\s*USDT/i);
+  const heroTotal = total ? number(total[1]) : null;
   const nominalLabel = findLabel(/Общее|Загальна|Total/i);
   const displayedNominal = numeric(aligned(nominalLabel));
+  // Read the second printed wallet amount too; never calculate it from nominal and fee.
+  const receiptLabel = rows.find(r => /Количество|Кількість|Quantity|Amount/i.test(leftText(r)) &&
+    rows.some(next => next.cy >= r.cy && next.cy - r.cy < 0.045 && /получени|отриман|receiv/i.test(leftText(next))));
+  const detailTotal = order.side === 'buy' ? numeric(aligned(receiptLabel)) : order.side === 'sell' ? displayedNominal : null;
+  order.total = heroTotal !== null && detailTotal !== null && Math.abs(heroTotal - detailTotal) > 0.000001 ? null : heroTotal ?? detailTotal;
   if (order.side === 'buy') order.nominal = displayedNominal;
   else {
     // On Binance sell screens "Общее кол-во" includes the fee. The transferred amount doesn't.

@@ -140,6 +140,21 @@ test('Бот: чужой пользователь и групповой чат �
   c.message.message.from.id = 42; c.message.message.chat.type = 'group'; await c.bot.handle(c.message);
   assert.equal(c.count(), 0); assert.equal(c.sheets.writes, 0);
 });
+
+test('Бот: повторная отправка ошибочного черновика запускает OCR заново и сохраняет тот же ID', async t => {
+  const c = context(t); let calls = 0;
+  c.bot.ocr.recognize = async () => ++calls === 1 ? { ...buy(), fiat: 2660, total: null } : buy();
+  await c.bot.handle(c.message);
+  const first = c.store.pending('42')[0];
+  assert.equal(first.order.total, null);
+  assert.equal(c.sent.at(-1).markup.inline_keyboard.some(row => row.some(button => button.callback_data.startsWith('save:'))), false);
+  await c.bot.handle(c.message);
+  assert.equal(calls, 2);
+  const pending = c.store.pending('42');
+  assert.equal(pending.length, 1); assert.equal(pending[0].id, first.id);
+  assert.deepEqual(validate(pending[0].order).errors, []); assert.equal(c.sheets.writes, 0);
+  await c.bot.handle(c.message); assert.equal(calls, 2);
+});
 test('Бот: сбой Sheets оставляет подтверждение доступным после перезапуска', async t => {
   const c = context(t); await c.bot.handle(c.message);
   const draft = c.store.pending('42')[0]; c.sheets.loseResponse = true;

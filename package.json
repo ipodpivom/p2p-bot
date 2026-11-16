@@ -1,0 +1,21 @@
+{
+  "name": "p2p-screenshot-bot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24.0.0" },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/index.mjs",
+    "setup": "node scripts/setup.mjs",
+    "check": "node --env-file-if-exists=.env scripts/check.mjs",
+    "add-user": "node --env-file-if-exists=.env scripts/add-user.mjs",
+    "ocr": "node scripts/recognize.mjs",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@tesseract.js-data/eng": "1.0.0",
+    "@tesseract.js-data/rus": "1.0.0",
+    "sharp": "0.35.5",
+    "tesseract.js": "7.0.0"
+  }
+}

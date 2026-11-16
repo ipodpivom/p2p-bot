@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: p2p-screenshot-bot
+    runtime: docker
+    plan: free
+    healthCheckPath: /readyz
+    maxShutdownDelaySeconds: 150
+    autoDeployTrigger: off
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: ALLOWED_TELEGRAM_IDS
+        sync: false
+      - key: USER_SPREADSHEETS_JSON
+        value: "{}"
+      - key: GOOGLE_SPREADSHEET_ID
+        sync: false
+      - key: GOOGLE_SHEET_NAME
+        value: P2P Учет
+      - key: GOOGLE_SERVICE_ACCOUNT_FILE
+        value: /etc/secrets/google-service-account.json
+      - key: STATE_BACKEND
+        value: firestore
+      - key: FIRESTORE_PROJECT_ID
+        sync: false
+      - key: DATA_DIR
+        value: /app/data

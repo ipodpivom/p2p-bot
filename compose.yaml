@@ -1,0 +1,20 @@
+services:
+  bot:
+    build: .
+    restart: unless-stopped
+    init: true
+    env_file: .env
+    environment:
+      GOOGLE_SERVICE_ACCOUNT_FILE: /app/secrets/google-service-account.json
+      DATA_DIR: /app/data
+    volumes:
+      - ./data:/app/data
+      - ./secrets:/app/secrets:ro
+    mem_limit: 1g
+    cpus: 1.5
+    stop_grace_period: 50s
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: "3"

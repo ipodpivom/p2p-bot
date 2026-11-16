@@ -1,0 +1,9 @@
+node_modules
+.pnpm-store
+.pnpm-cache
+.env
+secrets
+google-service-account.json
+data
+.git
+work

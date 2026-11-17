@@ -4,9 +4,60 @@ import { readFileSync } from 'node:fs';
 import sharp from 'sharp';
 import { parseOcr } from '../src/parser.mjs';
 import { validate } from '../src/order.mjs';
-import { stripHryvniaGlyph } from '../src/ocr.mjs';
+import { stripHryvniaGlyph, prepareOcrImage, hasCompletionBadge } from '../src/ocr.mjs';
 
 const fixture = () => JSON.parse(readFileSync(new URL('fixtures/buy-zero-fee.json', import.meta.url)));
+const ukrainian = () => JSON.parse(readFileSync(new URL('fixtures/buy-uk-padded.json', import.meta.url)));
+
+test('Украинский PNG с боковыми полями: все данные покупки, ID и ник сохраняются точно', () => {
+  const order = parseOcr(ukrainian());
+  assert.deepEqual(order, { side: 'buy', status: 'completed', asset: 'USDT', currency: 'UAH', fiat: 566, price: 46.28,
+    nominal: 12.22, fee: 0.07, total: 12.15, orderId: '20260000000000000004', createdAt: '2026-01-03 03:07:00', counterparty: 'SampleUkrSeller' });
+  assert.deepEqual(validate(order).errors, []);
+});
+
+test('Завершити без подтверждённой галочки или внизу экрана не считается завершённым ордером', () => {
+  const input = ukrainian(); input.completedBadge = false;
+  assert.equal(parseOcr(input).status, null);
+  input.completedBadge = true;
+  for (const word of input.words) if (/Завершити/i.test(word.text)) word.y = 0.9;
+  assert.equal(parseOcr(input).status, null);
+});
+
+test('Украинские подписи продажи не меняют учёт списания с комиссией', () => {
+  const input = JSON.parse(readFileSync(new URL('fixtures/sell.json', import.meta.url)));
+  const translations = new Map([['Продать','Продаж'],['Цена','Ціна'],['фиатной','фіату'],['Общее','Загальна'],['Комиссия','Комісія'],['Время','Час'],['Никнейм','Псевдонім']]);
+  for (const word of input.words) word.text = translations.get(word.text) ?? word.text;
+  const order = parseOcr(input);
+  assert.equal(order.side, 'sell'); assert.equal(order.total, 42.5); assert.equal(order.nominal, 42.46); assert.equal(order.fee, 0.04);
+  assert.deepEqual(validate(order).errors, []);
+});
+
+test('Тёмный RGBA PNG остаётся видимым после подготовки для OCR', async () => {
+  const width=500, height=700, pixels=Buffer.alloc(width*height*4);
+  for(let y=0;y<height;y++)for(let x=0;x<width;x++) {
+    const index=(y*width+x)*4, light=x>150&&x<350&&y>100&&y<160;
+    pixels[index]=light?240:32; pixels[index+1]=light?240:38; pixels[index+2]=light?240:45; pixels[index+3]=255;
+  }
+  const image=await sharp(pixels,{raw:{width,height,channels:4}}).png().toBuffer();
+  const {normalized}=await prepareOcrImage(image), metadata=await sharp(normalized).metadata(), stats=await sharp(normalized).stats();
+  assert.equal(metadata.hasAlpha,false); assert.ok(stats.channels[0].max-stats.channels[0].min>200);
+});
+
+test('Чёрные боковые поля убираются без обрезания верхней и нижней части телефона', async () => {
+  const width=900, height=1200, pixels=Buffer.alloc(width*height*3,0);
+  for(let y=0;y<height;y++)for(let x=150;x<750;x++)for(let channel=0;channel<3;channel++)pixels[(y*width+x)*3+channel]=35;
+  const image=await sharp(pixels,{raw:{width,height,channels:3}}).png().toBuffer();
+  const prepared=await prepareOcrImage(image);
+  assert.equal(prepared.width,1500); assert.ok(prepared.height>=2950&&prepared.height<=3020);
+});
+
+test('Зелёное кольцо без галочки не подтверждает статус; кольцо с галочкой подтверждает', async () => {
+  const words=[{source:'full',text:'Завершити',x:0.45,y:0.18,width:0.2,height:0.02}];
+  const render=async tick=>sharp(Buffer.from(`<svg width="500" height="900"><rect width="500" height="900" fill="#20262d"/><circle cx="198" cy="171" r="14" stroke="#28bb88" stroke-width="2.5" fill="none"/>${tick?'<path d="M190 171 L196 177 L207 164" stroke="#28bb88" stroke-width="3" fill="none"/>':''}</svg>`)).png().toBuffer();
+  assert.equal(await hasCompletionBadge(await render(false),words,500,900),false);
+  assert.equal(await hasCompletionBadge(await render(true),words,500,900),true);
+});
 
 test('Покупка без комиссии: разделённая запятая, 400 гривен и 8.73 USDT', () => {
   const result = parseOcr(fixture());

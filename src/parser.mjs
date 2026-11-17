@@ -19,13 +19,17 @@ export function parseOcr(result) {
   const allText = words.map(w => w.text).join(' ');
   const leftText = row => row.words.filter(w => w.x < 0.46).map(w => w.text).join(' ');
   const findLabel = regex => rows.find(r => regex.test(leftText(r)));
-  const amountLabel = findLabel(/фиат|fiat/i), priceLabel = findLabel(/Цена|Ціна|Price/i);
+  const amountLabel = findLabel(/ф[иі]ат|fiat/i), priceLabel = findLabel(/Цена|Ціна|Price/i);
   // The trade heading precedes fiat fields. Counterparty names must not influence the side.
   const heading = rows.filter(row => row.cy < (amountLabel?.cy ?? 0.4)).map(leftText).join('\n');
-  const isBuy = /(?:^|\s)(?:Купить|Купити|Buy)(?=\s|USDT|$)/iu.test(heading);
-  const isSell = /(?:^|\s)(?:Продать|Продати|Sell)(?=\s|USDT|$)/iu.test(heading);
+  const isBuy = /(?:^|\s)(?:Купить|Купити|Куп[іи]вля|Buy)(?=\s|USDT|$)/iu.test(heading);
+  const isSell = /(?:^|\s)(?:Продать|Продати|Продаж|Sell)(?=\s|USDT|$)/iu.test(heading);
+  const statusRows = rows.filter(row => row.cy < Math.min(0.25, amountLabel?.cy ?? 0.25));
+  const explicitCompleted = statusRows.some(row => !/не\s*заверш|not\s+completed/iu.test(row.text) &&
+    row.words.some(word => /^(?:Завершено|Завершена|Completed|Виконано|Успішно)$/iu.test(word.text)));
+  const localizedCompleted = result.completedBadge === true && statusRows.some(row => row.words.some(word => /^Завершити$/iu.test(word.text)));
   const order = { side: isBuy && !isSell ? 'buy' : isSell && !isBuy ? 'sell' : null,
-    status: /Завершен[оа]|Завершено|Completed/i.test(text) ? 'completed' : null,
+    status: explicitCompleted || localizedCompleted ? 'completed' : null,
     asset: /USDT/i.test(text) ? 'USDT' : null, currency: /\bUAH\b/i.test(allText) ? 'UAH' : null,
     fiat: null, price: null, nominal: null, fee: null, total: null, orderId: null, createdAt: null, counterparty: null };
   function aligned(label, limit = 0.025) {
@@ -75,7 +79,7 @@ export function parseOcr(result) {
   const dateLine = aligned(dateLabel, 0.025).replace(/\s*([:-])\s*/g, '$1');
   const match = dateLine.match(/(20\d{2}-\d{2}-\d{2})\s*(\d{2}:\d{2}:\d{2})/);
   if (match) order.createdAt = `${match[1]} ${match[2]}`;
-  const nickLabel = findLabel(/Никнейм|Нікнейм|Nickname/i);
+  const nickLabel = findLabel(/Никнейм|Нікнейм|Псевдон[іи]м|Nickname/i);
   if (nickLabel) {
     const options = rightRows.filter(r => r.cy >= nickLabel.cy - 0.015 && r.cy < nickLabel.cy + 0.045 && !/UAH|USDT|\d{2}:\d{2}|20\d{2}-/.test(r.text));
     const candidate = options[0]?.words.filter(w => w.confidence >= 45 && /[\p{L}\p{N}]/u.test(w.text)).map(w => w.text).join(' ').trim();

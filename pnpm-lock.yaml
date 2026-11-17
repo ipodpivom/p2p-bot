@@ -14,6 +14,9 @@ importers:
       '@tesseract.js-data/rus':
         specifier: 1.0.0
         version: 1.0.0
+      '@tesseract.js-data/ukr':
+        specifier: 1.0.0
+        version: 1.0.0
       sharp:
         specifier: 0.35.5
         version: 0.35.5
@@ -261,6 +264,9 @@ packages:
   zlibjs@0.3.1:
     resolution: {integrity: sha512-+J9RrgTKOmlxFSDHo0pI1xM6BLVUv+o0ZT9ANtCxGkjIVCCUdx9alUF8Gm+dGLKbkkkidWIHFDZHDMpfITt4+w==}
 
+  '@tesseract.js-data/ukr@1.0.0':
+    resolution: {integrity: sha512-W/i5g9xbyBHJxklEb0mU2iLENBzU9CgXk1LVg82aQ95IaRwNFjY1z5y0vMcydEHQLx/TeawGrHiqlWoyXWCDzA==}
+
 snapshots:
 
   '@emnapi/runtime@1.11.3':
@@ -377,6 +383,8 @@ snapshots:
   '@tesseract.js-data/eng@1.0.0': {}
 
   '@tesseract.js-data/rus@1.0.0': {}
+
+  '@tesseract.js-data/ukr@1.0.0': {}
 
   bmp-js@0.1.0: {}
 

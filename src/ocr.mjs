@@ -140,6 +140,7 @@ export class Ocr {
     const labels = groupRows(words.filter(w => w.source === 'full' && w.x < 0.46));
     const values = groupRows(words.filter(w => w.x > 0.46));
     const money = {};
+    const hryvniaFields = [];
     try {
       await this.workers[1].setParameters({ tessedit_pageseg_mode: PSM.SINGLE_LINE, tessedit_char_whitelist: '0123456789.,' });
       for (const [field, pattern] of [['fiat', /ф[иі]ат|fiat/i], ['price', /Цена|Ціна|Price/i]]) {
@@ -154,13 +155,14 @@ export class Ocr {
         const crop = await sharp(normalized).extract({ left, top, width: Math.floor(width * 0.95) - left, height: bottom - top }).png().toBuffer();
         const numeric = await stripHryvniaGlyph(crop);
         if (!numeric) continue;
+        hryvniaFields.push(field);
         const { data } = await this.workers[1].recognize(numeric);
         money[field] = data.confidence >= 50 ? data.text.trim() : null;
       }
     } finally {
       await this.workers[1].setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT, tessedit_char_whitelist: '' });
     }
-    return { words, width, height, money, completedBadge };
+    return { words, width, height, money, completedBadge, hryvniaFields };
   }
   async close() { for (const w of this.workers) await w.terminate(); this.workers = []; }
 }

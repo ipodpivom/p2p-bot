@@ -20,6 +20,14 @@ export function parseOcr(result) {
   const leftText = row => row.words.filter(w => w.x < 0.46).map(w => w.text).join(' ');
   const findLabel = regex => rows.find(r => regex.test(leftText(r)));
   const amountLabel = findLabel(/ф[иі]ат|fiat/i), priceLabel = findLabel(/Цена|Ціна|Price/i);
+  const paymentLabel = findLabel(/Способ|Спосіб|Payment/i);
+  const paymentCodes = words.filter(word => word.x > 0.83 && paymentLabel &&
+    Math.abs(word.y + word.height / 2 - paymentLabel.cy) < 0.03)
+    .map(word => word.text.trim().toUpperCase()).filter(code => /^[A-Z]{3}$/.test(code));
+  // A small UAH badge can be read as "uaAH". Require matching hryvnia pixels
+  // on BOTH printed money fields, and never override an explicit other currency.
+  const hryvniaVerified = ['fiat', 'price'].every(field => result.hryvniaFields?.includes(field));
+  const currencyConflict = paymentCodes.some(code => code !== 'UAH');
   // The trade heading precedes fiat fields. Counterparty names must not influence the side.
   const heading = rows.filter(row => row.cy < (amountLabel?.cy ?? 0.4)).map(leftText).join('\n');
   const isBuy = /(?:^|\s)(?:Купить|Купити|Куп[іи]вля|Buy)(?=\s|USDT|$)/iu.test(heading);
@@ -30,7 +38,7 @@ export function parseOcr(result) {
   const localizedCompleted = result.completedBadge === true && statusRows.some(row => row.words.some(word => /^Завершити$/iu.test(word.text)));
   const order = { side: isBuy && !isSell ? 'buy' : isSell && !isBuy ? 'sell' : null,
     status: explicitCompleted || localizedCompleted ? 'completed' : null,
-    asset: /USDT/i.test(text) ? 'USDT' : null, currency: /\bUAH\b/i.test(allText) ? 'UAH' : null,
+    asset: /USDT/i.test(text) ? 'USDT' : null, currency: !currencyConflict && (/\bUAH\b/i.test(allText) || hryvniaVerified) ? 'UAH' : null,
     fiat: null, price: null, nominal: null, fee: null, total: null, orderId: null, createdAt: null, counterparty: null };
   function aligned(label, limit = 0.025) {
     if (!label) return '';

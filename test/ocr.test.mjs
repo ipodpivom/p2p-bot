@@ -8,6 +8,33 @@ import { stripHryvniaGlyph, prepareOcrImage, hasCompletionBadge } from '../src/o
 
 const fixture = () => JSON.parse(readFileSync(new URL('fixtures/buy-zero-fee.json', import.meta.url)));
 const ukrainian = () => JSON.parse(readFileSync(new URL('fixtures/buy-uk-padded.json', import.meta.url)));
+const currencyBadge = () => JSON.parse(readFileSync(new URL('fixtures/buy-currency-badge.json', import.meta.url)));
+
+test('Ошибка чтения UAH как uaAH не блокирует ордер с двумя проверенными знаками гривны', () => {
+  const order = parseOcr(currencyBadge());
+  assert.deepEqual(order, { side: 'buy', status: 'completed', asset: 'USDT', currency: 'UAH', fiat: 2500, price: 45.8,
+    nominal: 54.58, fee: 0.05, total: 54.53, orderId: '20260000000000000005', createdAt: '2026-01-04 20:01:39', counterparty: 'SampleCurrencySeller' });
+  assert.deepEqual(validate(order).errors, []);
+});
+
+test('Повреждённая надпись валюты без двух проверенных символов не угадывается', () => {
+  for (const evidence of [undefined, [], ['fiat'], ['price']]) {
+    const input = currencyBadge(); input.hryvniaFields = evidence;
+    const order = parseOcr(input);
+    assert.equal(order.currency, null);
+    assert.ok(validate(order).errors.includes('поддерживаются только USDT / UAH'));
+  }
+});
+
+test('Явная другая валюта у способа оплаты блокирует запись даже с гривневыми символами', () => {
+  for (const code of ['USD', 'EUR', 'PLN', 'KZT']) {
+    const input = currencyBadge();
+    for (const word of input.words) if (word.x > 0.83 && word.y > 0.49 && word.y < 0.52) word.text = code;
+    const order = parseOcr(input);
+    assert.equal(order.currency, null, code);
+    assert.ok(validate(order).errors.includes('поддерживаются только USDT / UAH'), code);
+  }
+});
 
 test('Украинский PNG с боковыми полями: все данные покупки, ID и ник сохраняются точно', () => {
   const order = parseOcr(ukrainian());
